@@ -467,4 +467,6 @@ export default function Onboarding() {
     </TabsContent>
   </Tabs>
 </Layout>
+  );
+}
 
