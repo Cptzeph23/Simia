@@ -430,10 +430,10 @@ export default function Onboarding() {
                     </div>
                   </div>
                   
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <FileText className="h-4 w-4" />
-                    <span>By submitting, a draft policy will be generated for approval.</span>
-                  </div>
+//                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
+//                     <FileText className="h-4 w-4" />
+//                     <span>By submitting, a draft policy will be generated for approval.</span>
+//                   </div>
                 </CardContent>
               </Card>
             )}
@@ -459,15 +459,15 @@ export default function Onboarding() {
     </TabsContent>
   </Tabs>
 </Layout>
-                    <FileText className="h-4 w-4" />
-                    <span>By submitting, a draft policy will be generated for approval.</span>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            <div className="flex justify-between mt-6">
-              <Button type="button" variant="outline" onClick={handleBack} disabled={step === 1}>
-                Back
-              </Button>
-              
+//                     <FileText className="h-4 w-4" />
+//                     <span>By submitting, a draft policy will be generated for approval.</span>
+//                   </div>
+//                 </CardContent>
+//               </Card>
+//             )}
+//
+//             <div className="flex justify-between mt-6">
+//               <Button type="button" variant="outline" onClick={handleBack} disabled={step === 1}>
+//                 Back
+//               </Button>
+//

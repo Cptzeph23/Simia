@@ -147,7 +147,7 @@ export default function Claims() {
     const statusCounts = claims.reduce<Record<string, number>>((acc, claim) => {
       acc[claim.status] = (acc[claim.status] || 0) + 1;
       return acc;
-    }, );
+    }, {});
     
     return Object.entries(statusCounts).map(([name, value]) => ({
       name,
