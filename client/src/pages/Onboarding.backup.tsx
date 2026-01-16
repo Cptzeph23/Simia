@@ -377,66 +377,74 @@ export default function Onboarding() {
               </Card>
             )}
 
-            {step === 4 && (
-              <Card className="border-none shadow-md animate-in fade-in slide-in-from-right-4 duration-300">
-                <CardHeader>
-                  <CardTitle>Review & Submit</CardTitle>
-                  <CardDescription>Please verify all details before creating the policy.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="bg-muted/30 p-4 rounded-lg space-y-4">
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-muted-foreground block">Client Name</span>
-                        <span className="font-medium">{formData.firstName} {formData.lastName}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground block">ID Number</span>
-                        <span className="font-medium">{formData.idNumber}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground block">Policy Type</span>
-                        <span className="font-medium">{formData.policyType}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground block">Start Date</span>
-                        <span className="font-medium">{formData.startDate}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground block">Coverage Amount</span>
-                        <span className="font-medium">{formData.coverageAmount ? `KES ${parseInt(formData.coverageAmount).toLocaleString()}` : 'N/A'}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground block">Contact</span>
-                        <span className="font-medium">{formData.phone}</span>
-                        <div className="text-sm text-muted-foreground">{formData.email}</div>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground block">Location</span>
-                        <span className="font-medium">{formData.location}</span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <FileText className="h-4 w-4" />
-                    <span>By submitting, a draft policy will be generated for approval.</span>
-                  </div>
-                      <div>
-                        <span className="text-muted-foreground block">Contact</span>
-                        <span className="font-medium">{formData.phone}</span>
-                        <div className="text-sm text-muted-foreground">{formData.email}</div>
-                      </div>
-                    </div>
-                  </div>
-                  
-//                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
-//                     <FileText className="h-4 w-4" />
-//                     <span>By submitting, a draft policy will be generated for approval.</span>
-//                   </div>
-                </CardContent>
-              </Card>
-            )}
+        {step === 4 && (
+  <Card className="border-none shadow-md animate-in fade-in slide-in-from-right-4 duration-300">
+    <CardHeader>
+      <CardTitle>Review & Submit</CardTitle>
+      <CardDescription>
+        Please verify all details before creating the policy.
+      </CardDescription>
+    </CardHeader>
+
+    <CardContent className="space-y-6">
+      <div className="bg-muted/30 p-4 rounded-lg space-y-4">
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <span className="text-muted-foreground block">Client Name</span>
+            <span className="font-medium">
+              {formData.firstName} {formData.lastName}
+            </span>
+          </div>
+
+          <div>
+            <span className="text-muted-foreground block">ID Number</span>
+            <span className="font-medium">{formData.idNumber}</span>
+          </div>
+
+          <div>
+            <span className="text-muted-foreground block">Policy Type</span>
+            <span className="font-medium">{formData.policyType}</span>
+          </div>
+
+          <div>
+            <span className="text-muted-foreground block">Start Date</span>
+            <span className="font-medium">{formData.startDate}</span>
+          </div>
+
+          <div>
+            <span className="text-muted-foreground block">Coverage Amount</span>
+            <span className="font-medium">
+              {formData.coverageAmount
+                ? `KES ${parseInt(formData.coverageAmount).toLocaleString()}`
+                : "N/A"}
+            </span>
+          </div>
+
+          <div>
+            <span className="text-muted-foreground block">Contact</span>
+            <span className="font-medium">{formData.phone}</span>
+            <div className="text-sm text-muted-foreground">
+              {formData.email}
+            </div>
+          </div>
+
+          <div>
+            <span className="text-muted-foreground block">Location</span>
+            <span className="font-medium">{formData.location}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <FileText className="h-4 w-4" />
+        <span>
+          By submitting, a draft policy will be generated for approval.
+        </span>
+      </div>
+    </CardContent>
+  </Card>
+)}
+
 
             <div className="flex justify-between mt-6">
               <Button type="button" variant="outline" onClick={handleBack} disabled={step === 1}>
@@ -459,15 +467,4 @@ export default function Onboarding() {
     </TabsContent>
   </Tabs>
 </Layout>
-//                     <FileText className="h-4 w-4" />
-//                     <span>By submitting, a draft policy will be generated for approval.</span>
-//                   </div>
-//                 </CardContent>
-//               </Card>
-//             )}
-//
-//             <div className="flex justify-between mt-6">
-//               <Button type="button" variant="outline" onClick={handleBack} disabled={step === 1}>
-//                 Back
-//               </Button>
-//
+
