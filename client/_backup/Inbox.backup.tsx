@@ -1,295 +1,135 @@
-import React, { 
-  useState, 
-  useEffect, 
-  useCallback, 
-  useMemo, 
-  lazy, 
-  Suspense, 
-  useRef,
-  useTransition,
-  startTransition
-} from 'react';
-import { useDebounce, useDebouncedCallback } from 'use-debounce';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
+import { useDebounce } from 'use-debounce';
 import { Layout } from "@/components/layout/Layout";
 import { Card } from "@/components/ui/card";
 import { useStore } from "@/lib/mockData";
 import { Button } from "@/components/ui/button";
 import { 
-  Mail, 
-  Star, 
-  Archive, 
-  Trash2, 
-  RefreshCw, 
-  Search, 
-  Filter, 
-  Inbox as InboxIcon, 
-  MailWarning, 
-  Star as StarFilled, 
-  Tag, 
-  MoreVertical, 
-  MailOpen, 
-  Clock,
-  AlertCircle,
-  Loader2,
-  Paperclip
+  Mail, Check, Star, Archive, Trash2, RefreshCw, Search, 
+  Filter, Inbox as InboxIcon, MailWarning, Star as StarFilled, 
+  ArrowRight, X, Tag, MoreVertical, ChevronLeft, ChevronRight, 
+  MailOpen, Clock, Reply, ReplyAll, Forward, FileText, Paperclip 
 } from "lucide-react";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogTrigger 
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { format, isToday, isYesterday } from 'date-fns';
+import { Separator } from "@/components/ui/separator";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { format, parseISO, isToday, isYesterday, formatDistanceToNow } from 'date-fns';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { useToast } from "@/hooks/use-toast";
-import { useHotkeys } from 'react-hotkeys-hook';
+
+// Lazy load heavy components
+const EmailEditor = lazy(() => import('@/components/email/EmailEditor'));
+const EmailPreview = lazy(() => import('@/components/email/EmailPreview'));
 
 // Types
-import type { Email, EmailLabel, EmailAction, EmailFilter } from '@/types/email';
+type EmailFilter = 'all' | 'unread' | 'starred' | 'archived' | 'sent' | 'drafts' | 'trash';
+type EmailLabel = 'work' | 'personal' | 'important' | 'travel' | 'finance' | 'social';
+
+interface Email {
+  id: string;
+  from: string;
+  to?: string[];
+  cc?: string[];
+  bcc?: string[];
+  subject: string;
+  body: string;
+  date: string;
+  isRead: boolean;
+  isStarred: boolean;
+  isArchived: boolean;
+  isDraft?: boolean;
+  isSent?: boolean;
+  labels?: EmailLabel[];
+  snippet: string;
+  attachments?: Array<{
+    id: string;
+    name: string;
+    type: string;
+    size: number;
+    url: string;
+  }>;
+  threadId?: string;
+  inReplyTo?: string;
+  references?: string[];
+}
+
+interface EmailAction {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+  onClick: (emailIds: string[]) => void;
+  variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
+  isBulkAction?: boolean;
+}
 
 // Constants
-import { EMAIL_LABELS, EMAIL_ACTIONS, ITEMS_PER_PAGE } from '@/constants/email';
+const EMAIL_LABELS: { [key in EmailLabel]: { label: string; color: string } } = {
+  work: { label: 'Work', color: 'bg-blue-500' },
+  personal: { label: 'Personal', color: 'bg-green-500' },
+  important: { label: 'Important', color: 'bg-red-500' },
+  travel: { label: 'Travel', color: 'bg-yellow-500' },
+  finance: { label: 'Finance', color: 'bg-purple-500' },
+  social: { label: 'Social', color: 'bg-pink-500' },
+};
 
-// Lazy load heavy components (temporarily disabled as components don't exist yet)
-// const EmailEditor = lazy(() => import('@/components/email/EmailEditor'));
-// const EmailPreview = lazy(() => import('@/components/email/EmailPreview'));
-
-// Temporary placeholder components
-const EmailEditor = () => <div>Email Editor (not implemented)</div>;
-const EmailPreview = () => <div>Email Preview (not implemented)</div>;
-
-// Virtualized List Component
-const VirtualList = React.memo(({ 
-  items, 
-  renderItem, 
-  itemHeight = 72, 
-  overscan = 5 
-}: {
-  items: any[];
-  renderItem: (item: any, index: number) => React.ReactNode;
-  itemHeight?: number;
-  overscan?: number;
-}) => {
-  const parentRef = useRef<HTMLDivElement>(null);
-  const rowVirtualizer = useVirtualizer({
-    count: items.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: useCallback(() => itemHeight, [itemHeight]),
-    overscan,
-  });
-
-  return (
-    <div 
-      ref={parentRef}
-      className="w-full h-full overflow-auto"
-    >
-      <div
-        className="relative w-full"
-        style={{
-          height: `${rowVirtualizer.getTotalSize()}px`,
-        }}
-      >
-        {rowVirtualizer.getVirtualItems().map(virtualRow => {
-          const item = items[virtualRow.index];
-          return (
-            <div
-              key={virtualRow.key}
-              ref={rowVirtualizer.measureElement}
-              className="absolute top-0 left-0 w-full"
-              style={{
-                transform: `translateY(${virtualRow.start}px)`,
-              }}
-            >
-              {renderItem(item, virtualRow.index)}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-});
-
-VirtualList.displayName = 'VirtualList';
-
-// State type for the inbox
-interface InboxState {
-  emails: Email[];
-  filteredEmails: Email[];
-  selectedEmails: string[];
-  currentPage: number;
-  hasMore: boolean;
-  isLoading: boolean;
-  isRefreshing: boolean;
-  error: string | null;
-  searchQuery: string;
-  activeFilter: EmailFilter;
-  selectedEmail: Email | null;
-  isComposeOpen: boolean;
-  isPreviewOpen: boolean;
-  isMobileView: boolean;
-}
-
-type InboxAction =
-  | { type: 'SET_EMAILS'; payload: Email[] }
-  | { type: 'SET_FILTERED_EMAILS'; payload: Email[] }
-  | { type: 'SELECT_EMAIL'; payload: string }
-  | { type: 'DESELECT_EMAIL'; payload: string }
-  | { type: 'SELECT_ALL' }
-  | { type: 'DESELECT_ALL' }
-  | { type: 'TOGGLE_STAR'; payload: { id: string; isStarred: boolean } }
-  | { type: 'MARK_AS_READ'; payload: string[] }
-  | { type: 'MARK_AS_UNREAD'; payload: string[] }
-  | { type: 'ARCHIVE_EMAILS'; payload: string[] }
-  | { type: 'DELETE_EMAILS'; payload: string[] }
-  | { type: 'SET_SEARCH_QUERY'; payload: string }
-  | { type: 'SET_ACTIVE_FILTER'; payload: EmailFilter }
-  | { type: 'SET_SELECTED_EMAIL'; payload: Email | null }
-  | { type: 'SET_IS_COMPOSE_OPEN'; payload: boolean }
-  | { type: 'SET_IS_PREVIEW_OPEN'; payload: boolean }
-  | { type: 'SET_IS_LOADING'; payload: boolean }
-  | { type: 'SET_IS_REFRESHING'; payload: boolean }
-  | { type: 'SET_ERROR'; payload: string | null }
-  | { type: 'LOAD_MORE_EMAILS'; payload: Email[] }
-  | { type: 'SET_HAS_MORE'; payload: boolean };
-
-// Reducer function for managing inbox state
-function inboxReducer(state: InboxState, action: InboxAction): InboxState {
-  switch (action.type) {
-    case 'SET_EMAILS':
-      return { ...state, emails: action.payload };
-    case 'SET_FILTERED_EMAILS':
-      return { ...state, filteredEmails: action.payload };
-    case 'SELECT_EMAIL':
-      return { ...state, selectedEmails: [...state.selectedEmails, action.payload] };
-    case 'DESELECT_EMAIL':
-      return { 
-        ...state, 
-        selectedEmails: state.selectedEmails.filter(id => id !== action.payload) 
-      };
-    case 'SELECT_ALL':
-      return { ...state, selectedEmails: state.filteredEmails.map(email => email.id) };
-    case 'DESELECT_ALL':
-      return { ...state, selectedEmails: [] };
-    case 'TOGGLE_STAR':
-      return {
-        ...state,
-        emails: state.emails.map(email => 
-          email.id === action.payload.id 
-            ? { ...email, isStarred: action.payload.isStarred } 
-            : email
-        ),
-        filteredEmails: state.filteredEmails.map(email =>
-          email.id === action.payload.id
-            ? { ...email, isStarred: action.payload.isStarred }
-            : email
-        )
-      };
-    case 'MARK_AS_READ':
-      return {
-        ...state,
-        emails: state.emails.map(email => 
-          action.payload.includes(email.id) 
-            ? { ...email, isRead: true } 
-            : email
-        ),
-        filteredEmails: state.filteredEmails.map(email =>
-          action.payload.includes(email.id)
-            ? { ...email, isRead: true }
-            : email
-        )
-      };
-    case 'MARK_AS_UNREAD':
-      return {
-        ...state,
-        emails: state.emails.map(email => 
-          action.payload.includes(email.id) 
-            ? { ...email, isRead: false } 
-            : email
-        ),
-        filteredEmails: state.filteredEmails.map(email =>
-          action.payload.includes(email.id)
-            ? { ...email, isRead: false }
-            : email
-        )
-      };
-    case 'ARCHIVE_EMAILS':
-      return {
-        ...state,
-        emails: state.emails.filter(email => !action.payload.includes(email.id)),
-        filteredEmails: state.filteredEmails.filter(
-          email => !action.payload.includes(email.id)
-        ),
-        selectedEmails: state.selectedEmails.filter(
-          id => !action.payload.includes(id)
-        )
-      };
-    case 'DELETE_EMAILS':
-      return {
-        ...state,
-        emails: state.emails.filter(email => !action.payload.includes(email.id)),
-        filteredEmails: state.filteredEmails.filter(
-          email => !action.payload.includes(email.id)
-        ),
-        selectedEmails: state.selectedEmails.filter(
-          id => !action.payload.includes(id)
-        )
-      };
-    case 'SET_SEARCH_QUERY':
-      return { ...state, searchQuery: action.payload };
-    case 'SET_ACTIVE_FILTER':
-      return { ...state, activeFilter: action.payload, currentPage: 1 };
-    case 'SET_SELECTED_EMAIL':
-      return { 
-        ...state, 
-        selectedEmail: action.payload,
-        // Mark as read when selected
-        emails: action.payload 
-          ? state.emails.map(email => 
-              email.id === action.payload?.id && !email.isRead 
-                ? { ...email, isRead: true } 
-                : email
-            )
-          : state.emails,
-        filteredEmails: action.payload
-          ? state.filteredEmails.map(email =>
-              email.id === action.payload?.id && !email.isRead
-                ? { ...email, isRead: true }
-                : email
-            )
-          : state.filteredEmails
-      };
-    case 'SET_IS_COMPOSE_OPEN':
-      return { ...state, isComposeOpen: action.payload };
-    case 'SET_IS_PREVIEW_OPEN':
-      return { ...state, isPreviewOpen: action.payload };
-    case 'SET_IS_LOADING':
-      return { ...state, isLoading: action.payload };
-    case 'SET_IS_REFRESHING':
-      return { ...state, isRefreshing: action.payload };
-    case 'SET_ERROR':
-      return { ...state, error: action.payload };
-    case 'LOAD_MORE_EMAILS':
-      return {
-        ...state,
-        emails: [...state.emails, ...action.payload],
-        filteredEmails: [...state.filteredEmails, ...action.payload],
-        currentPage: state.currentPage + 1
-      };
-    case 'SET_HAS_MORE':
-      return { ...state, hasMore: action.payload };
-    default:
-      return state;
+const EMAIL_ACTIONS: EmailAction[] = [
+  {
+    id: 'read',
+    label: 'Mark as Read',
+    icon: <MailOpen className="h-4 w-4" />,
+    onClick: (ids) => console.log('Mark as read:', ids),
+    variant: 'ghost',
+    isBulkAction: true
+  },
+  {
+    id: 'unread',
+    label: 'Mark as Unread',
+    icon: <Mail className="h-4 w-4" />,
+    onClick: (ids) => console.log('Mark as unread:', ids),
+    variant: 'ghost',
+    isBulkAction: true
+  },
+  {
+    id: 'star',
+    label: 'Star',
+    icon: <Star className="h-4 w-4" />,
+    onClick: (ids) => console.log('Star:', ids),
+    variant: 'ghost'
+  },
+  {
+    id: 'archive',
+    label: 'Archive',
+    icon: <Archive className="h-4 w-4" />,
+    onClick: (ids) => console.log('Archive:', ids),
+    variant: 'ghost',
+    isBulkAction: true
+  },
+  {
+    id: 'delete',
+    label: 'Delete',
+    icon: <Trash2 className="h-4 w-4" />,
+    onClick: (ids) => console.log('Delete:', ids),
+    variant: 'ghost',
+    isBulkAction: true
+  },
+  {
+    id: 'label',
+    label: 'Add Label',
+    icon: <Tag className="h-4 w-4" />,
+    onClick: (ids) => console.log('Add label to:', ids),
+    variant: 'ghost',
+    isBulkAction: true
   }
-}
+];
 
 // Utility functions
 const formatDate = (dateString: string): string => {
@@ -498,11 +338,11 @@ const EmailList = ({
 
 // Main Inbox Component
 export default function Inbox() {
-  const { emails: allEmails, markEmailRead, addTask, currentUser } = useStore();
+  const { emails, markEmailRead, addTask, currentUser } = useStore();
   const { toast } = useToast();
   
   // State
-  const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
+  const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
   const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch] = useDebounce(searchQuery, 300);
@@ -547,9 +387,6 @@ export default function Inbox() {
     // deleteEmail(id);
   }, []);
 
-  // Use a default empty array if allEmails is undefined
-  const emails = allEmails || [];
-
   // Filter and sort emails
   const filteredEmails = useMemo(() => {
     return emails.filter(email => {
@@ -571,6 +408,8 @@ export default function Inbox() {
         (filter === 'unread' && !email.isRead) ||
         (filter === 'starred' && email.isStarred) ||
         (filter === 'archived' && email.isArchived) ||
+        (filter === 'sent' && email.isSent) ||
+        (filter === 'drafts' && email.isDraft) ||
         (filter === 'trash' && email.isArchived);
       
       return matchesSearch && matchesFilter;
@@ -579,13 +418,13 @@ export default function Inbox() {
 
   // Get the currently selected email
   const currentEmail = useMemo(() => 
-    emails.find(e => e.id === selectedEmailId),
-    [emails, selectedEmailId]
+    emails.find(e => e.id === selectedEmail),
+    [emails, selectedEmail]
   );
 
   // Handle email selection
   const handleSelectEmail = useCallback((id: string) => {
-    setSelectedEmailId(id);
+    setSelectedEmail(id);
     markEmailRead(id);
     
     if (isMobileView) {
@@ -602,23 +441,53 @@ export default function Inbox() {
     );
   }, []);
 
+  // Handle select all/none
+  const handleSelectAll = useCallback((checked: boolean) => {
+    if (checked) {
+      setSelectedEmails(filteredEmails.map(email => email.id));
+    } else {
+      setSelectedEmails([]);
+    }
+  }, [filteredEmails]);
+
   // Handle email actions
   const handleEmailAction = useCallback((action: EmailAction) => {
-    const targetEmails = selectedEmails.length > 0 ? selectedEmails :
-      (selectedEmailId ? [selectedEmailId] : []);
-
+    const targetEmails = selectedEmails.length > 0 ? selectedEmails : 
+      (selectedEmail ? [selectedEmail] : []);
+    
     if (targetEmails.length === 0) return;
-
+    
     action.onClick(targetEmails);
     
     // Reset selection after action
     if (action.isBulkAction) {
       setSelectedEmails([]);
     }
-  }, [selectedEmails, selectedEmailId]);
+  }, [selectedEmails, selectedEmail]);
+
+  const filteredEmails = useMemo(() => {
+    return emails.filter(email => {
+      const matchesSearch = !debouncedSearch || 
+        email.subject.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+        email.from.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+        email.body.toLowerCase().includes(debouncedSearch.toLowerCase());
+      
+      const matchesFilter = filter === 'all' || 
+        (filter === 'unread' && !email.isRead) ||
+        (filter === 'starred' && email.isStarred) ||
+        (filter === 'archived' && email.isArchived);
+      
+      return matchesSearch && matchesFilter && !email.isArchived;
+    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [emails, debouncedSearch, filter]);
+
+  const currentEmail = useMemo(() => 
+    emails.find(e => e.id === selectedEmail),
+    [emails, selectedEmail]
+  );
 
   const handleOpenEmail = useCallback((id: string) => {
-    setSelectedEmailId(id);
+    setSelectedEmail(id);
     markEmailRead(id);
     if (window.innerWidth < 768) {
       // In mobile view, scroll to top when opening email
@@ -815,11 +684,36 @@ export default function Inbox() {
                               onClick={() => handleOpenEmail(email.id)}
                             >
                               <div className="flex-shrink-0 mr-3 pt-1">
-                                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                                  {getInitials(email.from.name)}
-                                </div>
+                                <Avatar className="h-8 w-8">
+                                  <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${email.from}`} />
+                                  <AvatarFallback>{getInitials(email.from)}</AvatarFallback>
+                                </Avatar>
                               </div>
                               <div className="flex-1 min-w-0">
+                                <div className="flex justify-between items-start">
+                                  <h4 className={`text-sm truncate ${!email.isRead ? 'font-semibold' : 'font-medium'}`}>
+                                    {email.from}
+                                  </h4>
+                                  <div className="flex items-center gap-2 ml-2">
+                                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                      {formatDate(email.date)}
+                                    </span>
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        markEmailStarred(email.id, !email.isStarred);
+                                      }}
+                                      className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-amber-500 transition-opacity focus:opacity-100 focus:outline-none"
+                                      aria-label={email.isStarred ? 'Remove star' : 'Add star'}
+                                    >
+                                      {email.isStarred ? (
+                                        <StarFilled className="h-4 w-4 text-amber-500 fill-current" />
+                                      ) : (
+                                        <Star className="h-4 w-4" />
+                                      )}
+                                    </button>
+                                  </div>
+                                </div>
                                 <h5 className={`text-sm truncate ${!email.isRead ? 'font-semibold' : 'text-muted-foreground'}`}>
                                   {email.subject}
                                 </h5>
@@ -828,43 +722,33 @@ export default function Inbox() {
                                 </p>
                               </div>
                             </div>
-                        ))}
-                      </div>
-                    )}
-                  </ScrollArea>
-                )}
-              </div>
-            </div>
-          </Tabs>
-        </Card>
-      </div>
-
-      {/* Main Content */}
-      <div className={`flex-1 flex flex-col overflow-hidden ${isMobileView && !showSidebar ? 'ml-0' : 'md:ml-0'}`}>
-        {isMobileView && !showSidebar && (
-          <button
-            onClick={() => setShowSidebar(true)}
-            className="md:hidden p-2 m-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 absolute top-2 left-2 z-10"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-        )}
-        <Card className="h-full flex flex-col">
-          {currentEmail ? (
-            <>
-              <div className="p-4 border-b flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${currentEmail.from}`} />
-                    <AvatarFallback>{getInitials(currentEmail.from)}</AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="text-sm font-medium">{currentEmail.from}</p>
-                    <p className="text-xs text-muted-foreground">to me</p>
-                  </div>
+                          ))}
+                        </div>
+                      )}
+                    </ScrollArea>
+                  )}
                 </div>
+              </div>
+            </Tabs>
+          </Card>
+        </div>
+
+        {/* Email viewer */}
+        <div className="w-full lg:w-2/3">
+          <Card className="h-full flex flex-col">
+            {currentEmail ? (
+              <>
+                <div className="p-4 border-b flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${currentEmail.from}`} />
+                      <AvatarFallback>{getInitials(currentEmail.from)}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="text-sm font-medium">{currentEmail.from}</p>
+                      <p className="text-xs text-muted-foreground">to me</p>
+                    </div>
+                  </div>
                 <div className="flex items-center gap-2">
                   <Button 
                     variant="ghost" 
